@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from apiApp.views import LoginView, RegisterView, RegisterDetails, LoginDetails, DeleteAllLoginUsers,VerifyOTPView, ResendOTPView, CommandExecutionView
+from apiApp.views import LoginView, RegisterView, RegisterDetails, LoginDetails, DeleteAllLoginUsers, ResendOTPView, CommandExecutionView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -25,7 +25,6 @@ urlpatterns = [
     path("api/regdelete/<int:pk>", RegisterDetails.as_view(), name="regdelete"),
     path("api/logdelete/<int:pk>", LoginDetails.as_view(), name="logdelete"),
     path("api/logusersdel/",DeleteAllLoginUsers.as_view(), name="logusersdel" ),
-    path("api/verifyotp/", VerifyOTPView.as_view(), name="verifyotp" ),
     path("api/resendotp/", ResendOTPView.as_view(), name="resendotp"),
     path("api/execute/",CommandExecutionView.as_view(), name="execute")
 ]

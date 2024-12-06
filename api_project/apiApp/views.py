@@ -15,6 +15,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 from apiApp.serializers import RegisterSerializer, LoginSerializer, CommandExecutingLogSerializer
 from datetime import datetime
+from django.http import JsonResponse
+import logging
 
 
 def send_otp(email):
@@ -39,21 +41,11 @@ class LoginView(APIView):
             user = Register.objects.get(email=email)
             
             if user and check_password(password, user.password):
-               
-                otp = send_otp(email)
-                
-                
-                request.session['email'] = email
-                request.session['otp'] = otp
-                request.session['otp_sent_time'] = timezone.now().isoformat()
-                request.session['user_id'] = user.id
+                otp = send_otp(email) 
 
-                request.session.save() 
+                request.session["email"] = email
 
-                
-                print(f"Session data after storing OTP: {request.session.items()}")
-
-                return Response({"message": "OTP sent to your email"}, status=status.HTTP_200_OK)
+                return JsonResponse({"otp": otp}, status=200)
             else:
                 return Response({"message": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
         except Register.DoesNotExist:
@@ -115,42 +107,27 @@ class RegisterDetails(APIView):
       return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class VerifyOTPView(APIView):
-    def post(self, request):
-        
-        print("Session data at OTP verification:", request.session.items())
-
-        entered_otp = request.data.get('otp')
-        stored_otp = request.session.get('otp')
-        otp_sent_time = request.session.get('otp_sent_time')
-
-        if not stored_otp:
-            return Response({"message": "OTP not found in session"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if otp_sent_time and timezone.now() - timezone.datetime.fromisoformat(otp_sent_time) > timezone.timedelta(seconds=60):
-            return Response({"message": "OTP has expired, Please Click Resend OTP to get a new Code"})
-
-        if entered_otp == stored_otp:
-            return Response({"message": "OTP Verified Successfully"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"message": "Authentication Failed, OTP not Found"}, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 
 class ResendOTPView(APIView):
     def post(self, request):
-        email = request.session.get('email')
-        if not email:
-            return Response({"error": "Email not found in session."}, status=status.HTTP_400_BAD_REQUEST)
+        email = request.data.get("email")
 
-        otp = send_otp(email)
-        if otp:
-            request.session['otp'] = otp
-            request.session['otp_sent_time'] = timezone.now().isoformat()
-            return Response({"message": "A new OTP has been sent to your email."}, status=status.HTTP_200_OK)
-        
-        return Response({"error": "Failed to send OTP."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if email:
+           try:
+              new_otp = send_otp(email)
+
+              logging.info(f"New OTP generated and sent:{new_otp}")
+
+              return JsonResponse({"new_otp": new_otp, "success":True},status=200)
+           except Exception as e:
+              logging.error(f"Error sending OTP:{str(e)}")
+
+              return JsonResponse({"success": False, "error": "Failed to sent new OTP, Please try Again"},status=500)
+        else:
+           logging.error("Email not Found in Session")
+
+           return JsonResponse({"success":False, "error":"Email Not Found in Session."})
 
 
 
