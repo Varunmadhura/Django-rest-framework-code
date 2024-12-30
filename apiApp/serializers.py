@@ -7,9 +7,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = Register
         fields = ['id','username','email', 'mobile', 'password']
 
-    def create(self, validated_data):
-        validated_data['password'] = make_password(validated_data['password'])
-        return super(RegisterSerializer, self).create(validated_data)
 
 class LoginSerializer(serializers.ModelSerializer):
     class Meta:

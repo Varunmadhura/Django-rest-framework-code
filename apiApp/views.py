@@ -17,7 +17,97 @@ from apiApp.serializers import RegisterSerializer, LoginSerializer, CommandExecu
 from datetime import datetime
 from django.http import JsonResponse
 import logging
-from rest_framework.authtoken.models import Token
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework_simplejwt.views import (
+   TokenObtainPairView,
+   TokenRefreshView
+)
+
+
+class CustomTokenObtainView(TokenObtainPairView):
+   def post(self, request, *args, **kwargs):
+      try:
+         response = super().post(request, *args, **kwargs)
+         tokens = response.data
+
+         access_token = tokens["access"]
+         refresh_tokens = tokens["refresh"]
+
+         res = Response()
+
+         res.data = {"success": True}
+
+         res.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite='None',
+            path='/'
+         )
+
+         res.set_cookie(
+            key="refresh_token",
+            value=refresh_tokens,
+            httponly=True,
+            secure=True,
+            samesite='None',
+            path='/'
+         )
+         return res
+      except:
+         return Response({"success":False})
+      
+
+class CustomRefreshTokenView(TokenRefreshView):
+   def post(self, request, *args, **kwargs):
+      try:
+         refresh_token = request.COOKIES.get('refresh_token')
+
+         request.data['refresh'] = refresh_token
+
+         response = super().post(request, *args, **kwargs)
+
+         tokens = response.data
+         access_token = tokens['access']
+
+         res = Response()
+
+         res.data = {'refreshed': True}
+
+         res.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite='None',
+            path='/'
+         )
+
+         return res
+
+      except:
+         return Response({'refreshed':False})
+      
+
+@api_view(['POST'])
+def logout(request):
+   try:
+      res = Response()
+      res.data = {'success': True}
+      res.delete_cookie('access_token', path='/', samesite='None')
+      res.delete_cookie('refresh_token', path='/', samesite='None')
+      return res
+   except:
+      return Response({'success': False})
+   
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def is_authenticated(request):
+   return Response({'authenticated': True})
+
+
 
 
 def send_otp(email):
@@ -34,6 +124,7 @@ def send_otp(email):
 
 
 class LoginView(APIView):
+    authentication_classes = [JWTAuthentication]
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
@@ -46,13 +137,8 @@ class LoginView(APIView):
 
                 request.session["email"] = email
 
-                token, created = Token.objects.get_or_create(user=user)
+                return JsonResponse({"otp": otp}, status=200)
 
-                return JsonResponse({
-                   "otp": otp,
-                   "token": token.key,
-                   "message": "Login Successful"
-                }, status=200)
             else:
                 return Response({"message": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
         except Register.DoesNotExist:
@@ -94,12 +180,8 @@ class RegisterView(APIView):
    def post(self, request):
       serializer = RegisterSerializer(data= request.data)
       if serializer.is_valid():
-         user = serializer.save()
-         token, created = Token.objects.get_or_create(user=user)
-         return Response({
-            'token': token.key,
-            'user': serializer.data
-         }, status=status.HTTP_201_CREATED)
+         serializer.save()
+         return Response(serializer.data, status=status.HTTP_201_CREATED)
       return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class RegisterDetails(APIView):
    def get_object(self,pk):
